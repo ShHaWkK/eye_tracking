@@ -67,7 +67,7 @@ fatiguee_detector = FatigueDetector(
     check_interval=60,   # Double the blink check time
     min_blink_duration=0.12   # Adjusted to filter for very fast blinking
 )
-``
+```
 
 ## Next steps
 
