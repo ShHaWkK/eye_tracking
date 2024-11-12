@@ -1,65 +1,47 @@
 import cv2
 import numpy as np
-from src.acquisition.camera_capture import CameraCapture
-from src.detection.eye_detection import EyeDetector
-from src.calibration.calibration import Calibration
-import time
+
+class EyeDetector:
+    def __init__(self):
+        # Charger les classificateurs en cascade pour les visages et les yeux
+        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        self.eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+
+    def detect_eyes(self, frame):
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Convertir l'image en niveaux de gris
+        faces = self.face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5)
+
+        eyes_detected = []
+        for (x, y, w, h) in faces:
+            roi_gray = gray_frame[y:y+h, x:x+w]
+            roi_color = frame[y:y+h, x:x+w]
+            eyes = self.eye_cascade.detectMultiScale(roi_gray)
+
+            for (ex, ey, ew, eh) in eyes:
+                cv2.rectangle(roi_color, (ex, ey), (ex + ew, ey + eh), (0, 255, 0), 2)
+                eyes_detected.append((ex + x, ey + y, ew, eh))  # Ajout des coordonnées des yeux
+
+        return frame, eyes_detected
 
 def main():
-    capture = CameraCapture()
-    screen_size = (1920, 1080)  # Ajustez selon votre écran
-    calibration = Calibration(screen_size)
-    eye_detector = EyeDetector(calibration)
-    
-    # Étape de calibration
-    calibration_complete = False
-    while not calibration_complete:
-        frame = capture.get_frame()
-        frame_with_eyes, eyes_detected = eye_detector.detect_eyes(frame)
-        
-        calibration_point = calibration.get_next_calibration_point()
-        if calibration_point is None:
-            calibration_complete = True
+    capture = cv2.VideoCapture(0)  # Ouvrir la caméra
+    eye_detector = EyeDetector()
+
+    while True:
+        ret, frame = capture.read()
+        if not ret:
+            print("Erreur : Impossible de capturer le cadre.")
             break
-        
-        frame = calibration.draw_calibration_point(frame, calibration_point)
-        cv2.imshow('Calibration', frame)
-        
-        if len(eyes_detected) > 0:
-            eye_center, eye_size, filtered_pupil_center = eyes_detected[0]
-            gaze_point = eye_detector.estimate_gaze(eye_center, eye_size, filtered_pupil_center)
-            calibration.add_calibration_data(gaze_point)
-        
-        if cv2.waitKey(1000) & 0xFF == ord('q'):
+
+        frame_with_eyes, eyes_detected = eye_detector.detect_eyes(frame)  # Passer l'image à la détection des yeux
+
+        cv2.imshow('Eye Detection', frame_with_eyes)  # Afficher le cadre avec les yeux détectés
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):  # Quitter avec 'q'
             break
-    
-    if calibration_complete:
-        calibration.compute_mapping()
-    
+
+    capture.release()
     cv2.destroyAllWindows()
-    
-    # Suivi du regard après calibration
-    last_update_time = time.time()
-    try:
-        while True:
-            frame = capture.get_frame()
-            frame_with_eyes, eyes_detected = eye_detector.detect_eyes(frame)
-            
-            current_time = time.time()
-            if current_time - last_update_time > 0.1:  # Mise à jour toutes les 100ms
-                for eye_center, eye_size, filtered_pupil_center in eyes_detected:
-                    screen_point = eye_detector.estimate_gaze(eye_center, eye_size, filtered_pupil_center)
-                    if screen_point is not None:
-                        cv2.circle(frame_with_eyes, screen_point, 5, (0, 0, 255), -1)
-                
-                cv2.imshow('Eye Tracking', frame_with_eyes)
-                last_update_time = current_time
-            
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-    finally:
-        capture.release()
-        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
