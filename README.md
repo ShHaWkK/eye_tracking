@@ -47,12 +47,12 @@ The project uses multiple parameters to adjust the sensitivity of fatigue detect
 | Parameter   | Description   | Default value |
 |-----------------------------|-----------------------------------------------------------------------------------------------------------------|--------------------|
 | **`blink_threshold`**   | EAR (Eye Aspect Ratio) minimum to consider an eye closed. This determines when a blink is detected.   | `0.25`   |
-| **‘fatigue_duration_threshold’** | Average blink time (in seconds) above which fatigue is indicated.   | `0.3‘   |
-| **`blink_frequency_threshold`**   | Number of blinks in the interval `check_interval`to indicate fatigue.   | `8‘   |
-| **`check_interval`**   | Time interval (in seconds) to check blink frequency and assess fatigue.   | `30‘   |
-| **`min_blink_duration`**   | Minimum blink time (in seconds) to be considered valid.   | `0.1‘   |
-| ***`zoom_factor`**   | Zoom factor used in ‘AdvancedEyeDetector’ to adjust the size of the detected face when there is movement.   | `1.5‘   |
-| **`face_size_threshold`**   | Minimum face size to zoom in when user moves away from camera.   | `200‘   |
+| **‘fatigue_duration_threshold’** | Average blink time (in seconds) above which fatigue is indicated.   | `0.3`  |
+| **`blink_frequency_threshold`**   | Number of blinks in the interval `check_interval`to indicate fatigue.   | `8`  |
+| **`check_interval`**   | Time interval (in seconds) to check blink frequency and assess fatigue.   | `30`   |
+| **`min_blink_duration`**   | Minimum blink time (in seconds) to be considered valid.   | `0.1`  |
+| ***`zoom_factor`**   | Zoom factor used in ‘AdvancedEyeDetector’ to adjust the size of the detected face when there is movement.   | `1.5`   |
+| **`face_size_threshold`**   | Minimum face size to zoom in when user moves away from camera.   | `200`   |
 
 
 ### Example of Customization of Parameters
