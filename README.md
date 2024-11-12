@@ -28,21 +28,21 @@ pip install opencv-python numpy mediapipe
 ## Installation
 
 1. Clone this repository
-2. Create a virtual environment: ‘python -m venv venv’
-3. Enable virtual environment: ‘venv Scripts Activate’
-4. Install dependencies: ‘pip install -r requirements.txt’
+2. Create a virtual environment: `python -m venv venv`
+3. Enable virtual environment: `venv Scripts Activate`
+4. Install dependencies: `pip install -r requirements.txt`
 
 ## Usage
 
-Run the main script: ‘python main.py’
+Run the main script: `python main.py`
 
-Press 'q' to exit.
+Press `q` to exit.
 
 ## Project Structure
 
 ## Explanation of the Parameters
 
-The project uses multiple parameters to adjust the sensitivity of fatigue detection and engagement. These parameters are configurable in the ‘FatigueDetector’ class and can be modified to meet specific user needs.
+The project uses multiple parameters to adjust the sensitivity of fatigue detection and engagement. These parameters are configurable in the `FatigueDetector` class and can be modified to meet specific user needs.
 
 | Parameter   | Description   | Default value |
 |-----------------------------|-----------------------------------------------------------------------------------------------------------------|--------------------|
@@ -57,7 +57,7 @@ The project uses multiple parameters to adjust the sensitivity of fatigue detect
 
 ### Example of Customization of Parameters
 
-If the system is too sensitive (detecting too much blinking or reporting fatigue too quickly), you can increase the values of fatigue_duration_threshold` and `check_interval`. An example of a fit configuration is:
+If the system is too sensitive (detecting too much blinking or reporting fatigue too quickly), you can increase the values of `fatigue_duration_threshold` and `check_interval`. An example of a fit configuration is:
 
 ```python
 fatiguee_detector = FatigueDetector(
