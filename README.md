@@ -59,7 +59,7 @@ The project uses multiple parameters to adjust the sensitivity of fatigue detect
 
 If the system is too sensitive (detecting too much blinking or reporting fatigue too quickly), you can increase the values of fatigue_duration_threshold` and `check_interval`. An example of a fit configuration is:
 
-``python
+```python
 fatiguee_detector = FatigueDetector(
     blink_threshold=0.25,
     fatigue_duration_threshold=0.4,  # Increased to make fatigue detection less sensitive
