@@ -1,7 +1,7 @@
 import time
 
 class FatigueDetector:
-    def __init__(self, blink_threshold=0.25, fatigue_duration_threshold=0.25, blink_frequency_threshold=10, check_interval=60, min_blink_duration=0.1):
+    def __init__(self, blink_threshold=0.25, fatigue_duration_threshold=0.3, blink_frequency_threshold=8, check_interval=30, min_blink_duration=0.1):
         """
         Initialise le détecteur de fatigue avec des seuils personnalisables.
         
@@ -26,6 +26,7 @@ class FatigueDetector:
         self.blink_durations = []  # Stocke la durée de chaque clignement
         self.last_check_time = time.time()
         self.blinks_in_interval = 0
+        self.fatigue_alert_shown = False  # Indicateur pour limiter les alertes de fatigue répétitives
 
     def detect_blink(self, eye_aspect_ratio):
         """
@@ -65,8 +66,12 @@ class FatigueDetector:
         """
         # Condition 1 : Vérifier la durée moyenne des clignements
         average_blink_duration = self.calculate_average_blink_duration()
+        
+        # Limite la fréquence des messages de fatigue
         if average_blink_duration > self.fatigue_duration_threshold:
-            print("Fatigue détectée en raison de la durée moyenne des clignements élevée")  # Debug
+            if not self.fatigue_alert_shown:
+                print("Fatigue détectée en raison de la durée moyenne des clignements élevée")  # Debug
+                self.fatigue_alert_shown = True
             return True
 
         # Condition 2 : Vérifier la fréquence des clignements dans l'intervalle de temps
@@ -74,14 +79,16 @@ class FatigueDetector:
         if current_time - self.last_check_time >= self.check_interval:
             if self.blinks_in_interval > self.blink_frequency_threshold:
                 print("Fatigue détectée en raison de la fréquence élevée des clignements")  # Debug
-                # Réinitialiser les compteurs
+                self.fatigue_alert_shown = True  # Marque l’alerte de fatigue
+                # Réinitialiser les compteurs après chaque intervalle
                 self.blinks_in_interval = 0
                 self.last_check_time = current_time
                 return True
             else:
-                # Réinitialiser les compteurs sans fatigue détectée
+                # Réinitialiser les compteurs et l’alerte de fatigue
                 self.blinks_in_interval = 0
                 self.last_check_time = current_time
+                self.fatigue_alert_shown = False
 
         return False
 
@@ -99,4 +106,5 @@ class FatigueDetector:
         self.blink_durations.clear()
         self.blinks_in_interval = 0
         self.last_check_time = time.time()
+        self.fatigue_alert_shown = False
         print("Données de détection de fatigue réinitialisées")  # Debug
