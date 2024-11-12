@@ -1,86 +1,63 @@
 import cv2
 import numpy as np
-import dlib
 from sklearn.cluster import KMeans
 from src.tracking.kalman_filter import KalmanFilter
 
 class EyeDetector:
-    def __init__(self, calibration):
-        self.face_detector = dlib.get_frontal_face_detector()
-        self.landmark_predictor = dlib.shape_predictor("C:/Dossier_GitHub/eye_tracking/src/dat/shape_predictor_68_face_landmarks.dat")
-        self.calibration = calibration
+    def __init__(self):
+        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        self.eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
         self.kalman_filters = {}
-    def detect_eyes(self, gray_frame):
-        # Vérifiez si gray_frame est bien une image en niveaux de gris
-        if len(gray_frame.shape) != 2:
-            print("Erreur : l'image fournie n'est pas en niveaux de gris.")
-            return gray_frame, []
+        self.glasses_user = False
 
-        faces = self.face_detector(gray_frame)
-        
+    def set_glasses_user(self, glasses):
+        self.glasses_user = glasses
+
+    def detect_eyes(self, frame):
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        if self.glasses_user:
+            gray_frame = self.reduce_reflection(gray_frame)
+
+        faces = self.face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5)
         eyes_detected = []
-        for face in faces:
-            landmarks = self.landmark_predictor(gray_frame, face)
-            
-            left_eye = self.get_eye_coordinates(landmarks, 36, 41)
-            right_eye = self.get_eye_coordinates(landmarks, 42, 47)
-            
-            for eye in [left_eye, right_eye]:
-                eye_center = eye['center']
-                eye_frame = gray_frame[eye['top']:eye['bottom'], eye['left']:eye['right']]
+        for (x, y, w, h) in faces:
+            roi_gray = gray_frame[y:y+h, x:x+w]
+            roi_color = frame[y:y+h, x:x+w]
+            eyes = self.eye_cascade.detectMultiScale(roi_gray)
+
+            for (ex, ey, ew, eh) in eyes:
+                eye_center = (int(ex + ew/2), int(ey + eh/2))
+                eye_frame = roi_gray[ey:ey+eh, ex:ex+ew]
+
                 pupil_center = self.detect_pupil(eye_frame)
                 if pupil_center is not None:
-                    pupil_center = (pupil_center[0] + eye['left'], pupil_center[1] + eye['top'])
+                    pupil_center = (pupil_center[0] + ex, pupil_center[1] + ey)
                     filtered_center = self.apply_kalman_filter(eye_center, pupil_center)
-                    eyes_detected.append((eye_center, (eye['width'], eye['height']), filtered_center))
-                cv2.rectangle(gray_frame, (eye['left'], eye['top']), (eye['right'], eye['bottom']), (0, 255, 0), 2)
-        
-        return gray_frame, eyes_detected
+                    eyes_detected.append((eye_center, filtered_center))
+                
+                cv2.rectangle(roi_color, (ex, ey), (ex + ew, ey + eh), (0, 255, 0), 2)
 
-    def get_eye_coordinates(self, landmarks, start, end):
-        points = [(landmarks.part(n).x, landmarks.part(n).y) for n in range(start, end+1)]
-        left = min(points, key=lambda p: p[0])[0]
-        right = max(points, key=lambda p: p[0])[0]
-        top = min(points, key=lambda p: p[1])[1]
-        bottom = max(points, key=lambda p: p[1])[1]
-        width = right - left
-        height = bottom - top
-        center = (left + width//2, top + height//2)
-        return {'left': left, 'right': right, 'top': top, 'bottom': bottom, 'width': width, 'height': height, 'center': center}
+        return frame, eyes_detected
+
+    def reduce_reflection(self, frame):
+        frame = cv2.GaussianBlur(frame, (5, 5), 0)
+        _, frame = cv2.threshold(frame, 220, 255, cv2.THRESH_TRUNC)
+        return frame
 
     def detect_pupil(self, eye_frame):
-        gray_eye = cv2.cvtColor(eye_frame, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(eye_frame, 50 if self.glasses_user else 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
         
-        # Appliquer un filtre de Gabor pour améliorer les bords de l'iris
-        kernel = cv2.getGaborKernel((21, 21), 8.0, np.pi/4, 10.0, 0.5, 0, ktype=cv2.CV_32F)
-        filtered = cv2.filter2D(gray_eye, cv2.CV_8UC3, kernel)
-        
-        # Appliquer un seuillage adaptatif
-        _, thresh = cv2.threshold(filtered, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-        
-        # Appliquer une transformation de distance
         dist_transform = cv2.distanceTransform(thresh, cv2.DIST_L2, 5)
-        _, sure_fg = cv2.threshold(dist_transform, 0.7*dist_transform.max(), 255, 0)
-        
-        # Utiliser K-means pour trouver le centre de la pupille
+        _, sure_fg = cv2.threshold(dist_transform, 0.7 * dist_transform.max(), 255, 0)
+
         coords = np.column_stack(np.where(sure_fg > 0))
         if len(coords) > 0:
             kmeans = KMeans(n_clusters=1, random_state=0).fit(coords)
             center = kmeans.cluster_centers_[0]
-            return (int(center[1]), int(center[0]))  # Inverser x et y pour correspondre au format OpenCV
-        
-        return None
+            return int(center[1]), int(center[0])
 
-    def estimate_gaze(self, eye_center, eye_size, pupil_center):
-        ex, ey = eye_center
-        pw, ph = eye_size
-        px, py = pupil_center
-        
-        gaze_x = (px - ex) / (pw/2)
-        gaze_y = (py - ey) / (ph/2)
-        
-        screen_point = self.calibration.map_gaze_to_screen((gaze_x, gaze_y))
-        return screen_point if screen_point is not None else (int(gaze_x * self.calibration.screen_width), int(gaze_y * self.calibration.screen_height))
+        return None
 
     def apply_kalman_filter(self, eye_center, pupil_center):
         eye_id = eye_center
@@ -92,3 +69,22 @@ class EyeDetector:
         filtered_center = kf.update(np.array(pupil_center))
         
         return tuple(filtered_center.astype(int))
+
+    def calculate_eye_aspect_ratio(self, eye_points):
+        """
+        Calcul du ratio d'aspect de l'œil pour détecter s'il est ouvert ou fermé.
+        eye_points : Liste des points (x, y) de l'œil
+        """
+        if len(eye_points) < 6:
+            return 0  # Retourne 0 si nous n'avons pas assez de points
+
+        # Calcul des distances verticales entre les points de l'œil
+        A = np.linalg.norm(np.array(eye_points[1]) - np.array(eye_points[5]))
+        B = np.linalg.norm(np.array(eye_points[2]) - np.array(eye_points[4]))
+        
+        # Distance horizontale entre les points de l'œil
+        C = np.linalg.norm(np.array(eye_points[0]) - np.array(eye_points[3]))
+
+        # Calcul du ratio d'aspect de l'œil
+        ear = (A + B) / (2.0 * C)
+        return ear

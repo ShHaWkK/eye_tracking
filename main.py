@@ -1,17 +1,16 @@
 import cv2
+import time
 from src.detection.eye_detection import EyeDetector
 from src.calibration.calibration import Calibration
-from src.visualization.heatmap import HeatmapGenerator
+from src.engagement.attention import AttentionCalculator
+from src.fatigue.fatigue_detector import FatigueDetector
 
 def main():
     screen_size = (640, 480)
     calibration = Calibration(screen_size)
     eye_detector = EyeDetector()
-    heatmap_generator = HeatmapGenerator(screen_size)
-
-    # Interface simple pour sélectionner l’option lunettes
-    glasses_user = input("Est-ce que vous portez des lunettes ? (oui/non) : ").strip().lower() == "oui"
-    eye_detector.set_glasses_user(glasses_user)
+    attention_calculator = AttentionCalculator(screen_size)
+    fatigue_detector = FatigueDetector()
 
     capture = cv2.VideoCapture(0)
 
@@ -21,17 +20,26 @@ def main():
             print("Erreur : Impossible de capturer le cadre.")
             break
 
-        # Détection des yeux et récupération des points
         frame_with_eyes, eyes_detected = eye_detector.detect_eyes(frame)
 
-        # Ajouter des points de fixation pour générer la carte de chaleur
-        for _, filtered_center in eyes_detected:
-            heatmap_generator.add_fixation_point(filtered_center)
+        # Analyse de l'engagement et de la fatigue en fonction des yeux détectés
+        for eye_center, filtered_center in eyes_detected:
+            attention_calculator.calculate_attention(filtered_center)
 
-        # Générer et afficher la carte de chaleur
-        heatmap = heatmap_generator.generate_heatmap()
-        overlay = cv2.addWeighted(frame_with_eyes, 0.6, heatmap, 0.4, 0)
-        cv2.imshow('Eye Detection with Heatmap', overlay)
+            # Calcule de la fatigue en fonction de l’aspect de l’œil
+            eye_aspect_ratio = eye_detector.calculate_eye_aspect_ratio(eye_center)
+            fatigue_detector.detect_blink(eye_aspect_ratio)
+
+        # Affichage des scores de fatigue et d’engagement
+        engagement_score = attention_calculator.get_engagement_score()
+        fatigue_status = "Fatigué" if fatigue_detector.is_fatigued() else "Non fatigué"
+        blink_count = fatigue_detector.get_blink_count()
+
+        cv2.putText(frame_with_eyes, f'Engagement Score: {engagement_score}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(frame_with_eyes, f'Fatigue Status: {fatigue_status}', (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.putText(frame_with_eyes, f'Blinks: {blink_count}', (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+
+        cv2.imshow('Eye Detection with Engagement and Fatigue Monitoring', frame_with_eyes)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
