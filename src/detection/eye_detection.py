@@ -1,74 +1,47 @@
 import cv2
 import numpy as np
-from sklearn.cluster import KMeans
-from src.tracking.kalman_filter import KalmanFilter
+import mediapipe as mp
 
 class EyeDetector:
     def __init__(self):
-        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        self.eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
-        self.kalman_filters = {}
-        self.glasses_user = False
-
-    def set_glasses_user(self, glasses):
-        self.glasses_user = glasses
+        # Initialisation de Mediapipe pour la détection des visages et des landmarks
+        self.mp_face_mesh = mp.solutions.face_mesh
+        self.face_mesh = self.mp_face_mesh.FaceMesh(refine_landmarks=True)
 
     def detect_eyes(self, frame):
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        if self.glasses_user:
-            gray_frame = self.reduce_reflection(gray_frame)
-
-        faces = self.face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5)
+        # Conversion en RGB car Mediapipe utilise l'espace colorimétrique RGB
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = self.face_mesh.process(rgb_frame)
         eyes_detected = []
-        for (x, y, w, h) in faces:
-            roi_gray = gray_frame[y:y+h, x:x+w]
-            roi_color = frame[y:y+h, x:x+w]
-            eyes = self.eye_cascade.detectMultiScale(roi_gray)
+        avg_ear = 0
 
-            for (ex, ey, ew, eh) in eyes:
-                eye_center = (int(ex + ew/2), int(ey + eh/2))
-                eye_frame = roi_gray[ey:ey+eh, ex:ex+ew]
+        if results.multi_face_landmarks:
+            for face_landmarks in results.multi_face_landmarks:
+                # Obtenez les points de repère pour les deux yeux (indices selon Mediapipe)
+                left_eye_points = [
+                    (int(face_landmarks.landmark[i].x * frame.shape[1]), int(face_landmarks.landmark[i].y * frame.shape[0]))
+                    for i in [362, 385, 387, 263, 373, 380]
+                ]
+                right_eye_points = [
+                    (int(face_landmarks.landmark[i].x * frame.shape[1]), int(face_landmarks.landmark[i].y * frame.shape[0]))
+                    for i in [33, 160, 158, 133, 153, 144]
+                ]
 
-                pupil_center = self.detect_pupil(eye_frame)
-                if pupil_center is not None:
-                    pupil_center = (pupil_center[0] + ex, pupil_center[1] + ey)
-                    filtered_center = self.apply_kalman_filter(eye_center, pupil_center)
-                    eyes_detected.append((eye_center, filtered_center))
-                
-                cv2.rectangle(roi_color, (ex, ey), (ex + ew, ey + eh), (0, 255, 0), 2)
+                # Calculer le ratio d'aspect pour chaque œil
+                left_ear = self.calculate_eye_aspect_ratio(left_eye_points)
+                right_ear = self.calculate_eye_aspect_ratio(right_eye_points)
+                avg_ear = (left_ear + right_ear) / 2.0
 
-        return frame, eyes_detected
+                # Ajouter les centres des yeux pour la détection de l’attention
+                left_center = (left_eye_points[0][0] + left_eye_points[3][0]) // 2, (left_eye_points[1][1] + left_eye_points[4][1]) // 2
+                right_center = (right_eye_points[0][0] + right_eye_points[3][0]) // 2, (right_eye_points[1][1] + right_eye_points[4][1]) // 2
+                eyes_detected.append((left_center, right_center))
 
-    def reduce_reflection(self, frame):
-        frame = cv2.GaussianBlur(frame, (5, 5), 0)
-        _, frame = cv2.threshold(frame, 220, 255, cv2.THRESH_TRUNC)
-        return frame
+                # Afficher les contours des yeux pour la visualisation
+                for pt in left_eye_points + right_eye_points:
+                    cv2.circle(frame, pt, 2, (0, 255, 0), -1)
 
-    def detect_pupil(self, eye_frame):
-        _, thresh = cv2.threshold(eye_frame, 50 if self.glasses_user else 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-        
-        dist_transform = cv2.distanceTransform(thresh, cv2.DIST_L2, 5)
-        _, sure_fg = cv2.threshold(dist_transform, 0.7 * dist_transform.max(), 255, 0)
-
-        coords = np.column_stack(np.where(sure_fg > 0))
-        if len(coords) > 0:
-            kmeans = KMeans(n_clusters=1, random_state=0).fit(coords)
-            center = kmeans.cluster_centers_[0]
-            return int(center[1]), int(center[0])
-
-        return None
-
-    def apply_kalman_filter(self, eye_center, pupil_center):
-        eye_id = eye_center
-        if eye_id not in self.kalman_filters:
-            self.kalman_filters[eye_id] = KalmanFilter(pupil_center)
-        
-        kf = self.kalman_filters[eye_id]
-        kf.predict()
-        filtered_center = kf.update(np.array(pupil_center))
-        
-        return tuple(filtered_center.astype(int))
+        return frame, eyes_detected, avg_ear
 
     def calculate_eye_aspect_ratio(self, eye_points):
         """

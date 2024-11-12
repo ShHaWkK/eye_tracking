@@ -1,13 +1,10 @@
 import cv2
-import time
 from src.detection.eye_detection import EyeDetector
-from src.calibration.calibration import Calibration
 from src.engagement.attention import AttentionCalculator
 from src.fatigue.fatigue_detector import FatigueDetector
 
 def main():
     screen_size = (640, 480)
-    calibration = Calibration(screen_size)
     eye_detector = EyeDetector()
     attention_calculator = AttentionCalculator(screen_size)
     fatigue_detector = FatigueDetector()
@@ -20,17 +17,17 @@ def main():
             print("Erreur : Impossible de capturer le cadre.")
             break
 
-        frame_with_eyes, eyes_detected = eye_detector.detect_eyes(frame)
+        # Détection des yeux et récupération de l'EAR
+        frame_with_eyes, eyes_detected, avg_ear = eye_detector.detect_eyes(frame)
 
-        # Analyse de l'engagement et de la fatigue en fonction des yeux détectés
-        for eye_center, filtered_center in eyes_detected:
-            attention_calculator.calculate_attention(filtered_center)
+        # Analyser la fatigue basée sur l'EAR moyen
+        fatigue_detector.detect_blink(avg_ear)
 
-            # Calcule de la fatigue en fonction de l’aspect de l’œil
-            eye_aspect_ratio = eye_detector.calculate_eye_aspect_ratio(eye_center)
-            fatigue_detector.detect_blink(eye_aspect_ratio)
+        # Calculer l'engagement
+        for left_center, right_center in eyes_detected:
+            attention_calculator.calculate_attention(left_center)
 
-        # Affichage des scores de fatigue et d’engagement
+        # Affichage des scores de fatigue et d'engagement
         engagement_score = attention_calculator.get_engagement_score()
         fatigue_status = "Fatigué" if fatigue_detector.is_fatigued() else "Non fatigué"
         blink_count = fatigue_detector.get_blink_count()

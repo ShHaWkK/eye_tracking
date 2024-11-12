@@ -1,7 +1,9 @@
 import time
 
 class FatigueDetector:
-    def __init__(self):
+    def __init__(self, blink_threshold=0.2, fatigue_threshold=0.25):
+        self.blink_threshold = blink_threshold  # Seuil EAR pour détecter un clignement
+        self.fatigue_threshold = fatigue_threshold  # Durée moyenne indiquant la fatigue
         self.blink_count = 0
         self.blink_start_time = None
         self.is_blinking = False
@@ -10,15 +12,14 @@ class FatigueDetector:
 
     def detect_blink(self, eye_aspect_ratio):
         """
-        Détecte un clignement en fonction du rapport d'aspect de l'œil (eye_aspect_ratio).
-        eye_aspect_ratio : Un rapport basé sur la distance entre les points de l'œil
+        Détecte un clignement en fonction du ratio d'aspect de l'œil (EAR).
         """
-        if eye_aspect_ratio < 0.2: 
+        if eye_aspect_ratio < self.blink_threshold:  # Si EAR < seuil, l'œil est considéré fermé
             if not self.is_blinking:
                 self.is_blinking = True
                 self.blink_start_time = time.time()
         else:
-            if self.is_blinking:
+            if self.is_blinking:  # Clignement terminé lorsque EAR repasse au-dessus du seuil
                 self.is_blinking = False
                 blink_duration = time.time() - self.blink_start_time
                 self.blink_count += 1
@@ -33,6 +34,6 @@ class FatigueDetector:
 
     def is_fatigued(self):
         """
-        Détermine si l'utilisateur est fatigué en fonction de la fréquence et de la durée moyenne des clignements.
+        Détermine si l'utilisateur est fatigué en fonction de la durée moyenne des clignements.
         """
-        return self.average_blink_duration > 0.25
+        return self.average_blink_duration > self.fatigue_threshold
