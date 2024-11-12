@@ -1,13 +1,16 @@
 from src.acquisition.camera_capture import CameraCapture
+from src.detection.eye_detection import EyeDetector
 import cv2
 
 def main():
     capture = CameraCapture()
+    eye_detector = EyeDetector()
+    
     try:
         while True:
             frame = capture.get_frame()
-            # Ici,  le traitement pour la détection des yeux et l'estimation du regard
-            cv2.imshow('Eye Tracking', frame)
+            frame_with_eyes = eye_detector.detect_eyes(frame)
+            cv2.imshow('Eye Tracking', frame_with_eyes)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
     finally:
