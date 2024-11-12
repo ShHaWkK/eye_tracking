@@ -32,11 +32,12 @@ class Calibration:
     def map_gaze_to_screen(self, gaze_point):
         if self.mapping_function is not None:
             mapped_point = self.mapping_function(np.array([gaze_point]))
-            return (
-                int(mapped_point[0][0] * self.screen_width),
-                int(mapped_point[0][1] * self.screen_height)
-            )
-        return None
+            if not np.isnan(mapped_point).any():
+                return (
+                    int(mapped_point[0][0] * self.screen_width),
+                    int(mapped_point[0][1] * self.screen_height)
+                )
+        return None 
 
     def draw_calibration_point(self, frame, point):
         x = int(point[0] * self.screen_width)

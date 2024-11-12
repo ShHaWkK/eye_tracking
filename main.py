@@ -3,6 +3,7 @@ import numpy as np
 from src.acquisition.camera_capture import CameraCapture
 from src.detection.eye_detection import EyeDetector
 from src.calibration.calibration import Calibration
+import time
 
 def main():
     capture = CameraCapture()
@@ -11,13 +12,15 @@ def main():
     eye_detector = EyeDetector(calibration)
     
     # Étape de calibration
-    while True:
+    calibration_complete = False
+    while not calibration_complete:
         frame = capture.get_frame()
         frame_with_eyes, eyes_detected = eye_detector.detect_eyes(frame)
         
         calibration_point = calibration.get_next_calibration_point()
         if calibration_point is None:
-            break  # Calibration terminée
+            calibration_complete = True
+            break
         
         frame = calibration.draw_calibration_point(frame, calibration_point)
         cv2.imshow('Calibration', frame)
@@ -27,25 +30,31 @@ def main():
             gaze_point = eye_detector.estimate_gaze(eye_center, eye_size, filtered_pupil_center)
             calibration.add_calibration_data(gaze_point)
         
-        if cv2.waitKey(1000) & 0xFF == ord('q'):  # Attendre 1 seconde ou appuyer sur 'q' pour passer au point suivant
+        if cv2.waitKey(1000) & 0xFF == ord('q'):
             break
     
-    calibration.compute_mapping()
+    if calibration_complete:
+        calibration.compute_mapping()
+    
     cv2.destroyAllWindows()
     
     # Suivi du regard après calibration
+    last_update_time = time.time()
     try:
         while True:
             frame = capture.get_frame()
             frame_with_eyes, eyes_detected = eye_detector.detect_eyes(frame)
             
-            for eye_center, eye_size, filtered_pupil_center in eyes_detected:
-                screen_point = eye_detector.estimate_gaze(eye_center, eye_size, filtered_pupil_center)
+            current_time = time.time()
+            if current_time - last_update_time > 0.1:  # Mise à jour toutes les 100ms
+                for eye_center, eye_size, filtered_pupil_center in eyes_detected:
+                    screen_point = eye_detector.estimate_gaze(eye_center, eye_size, filtered_pupil_center)
+                    if screen_point is not None:
+                        cv2.circle(frame_with_eyes, screen_point, 5, (0, 0, 255), -1)
                 
-                # Dessiner le point de regard sur l'écran
-                cv2.circle(frame_with_eyes, screen_point, 5, (0, 0, 255), -1)
+                cv2.imshow('Eye Tracking', frame_with_eyes)
+                last_update_time = current_time
             
-            cv2.imshow('Eye Tracking', frame_with_eyes)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
     finally:
