@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.interpolate import griddata
 import json
-import cv2
 
 class Calibration:
     def __init__(self, screen_size):
@@ -39,26 +38,3 @@ class Calibration:
                     int(mapped_point[0][1] * self.screen_height)
                 )
         return None
-
-    def draw_calibration_point(self, frame, point):
-        x = int(point[0] * self.screen_width)
-        y = int(point[1] * self.screen_height)
-        cv2.circle(frame, (x, y), 10, (0, 255, 0), -1)
-        return frame
-
-    def save_calibration(self, filename):
-        data = {
-            'collected_data': self.collected_data,
-            'screen_width': self.screen_width,
-            'screen_height': self.screen_height
-        }
-        with open(filename, 'w') as f:
-            json.dump(data, f)
-
-    def load_calibration(self, filename):
-        with open(filename, 'r') as f:
-            data = json.load(f)
-        self.collected_data = data['collected_data']
-        self.screen_width = data['screen_width']
-        self.screen_height = data['screen_height']
-        self.compute_mapping()

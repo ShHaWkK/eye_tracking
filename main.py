@@ -1,31 +1,19 @@
 import cv2
-import numpy as np
-
-class EyeDetector:
-    def __init__(self):
-        # Charger les classificateurs en cascade pour les visages et les yeux
-        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        self.eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
-
-    def detect_eyes(self, frame):
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Convertir l'image en niveaux de gris
-        faces = self.face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5)
-
-        eyes_detected = []
-        for (x, y, w, h) in faces:
-            roi_gray = gray_frame[y:y+h, x:x+w]
-            roi_color = frame[y:y+h, x:x+w]
-            eyes = self.eye_cascade.detectMultiScale(roi_gray)
-
-            for (ex, ey, ew, eh) in eyes:
-                cv2.rectangle(roi_color, (ex, ey), (ex + ew, ey + eh), (0, 255, 0), 2)
-                eyes_detected.append((ex + x, ey + y, ew, eh))  # Ajout des coordonnées des yeux
-
-        return frame, eyes_detected
+from src.detection.eye_detection import EyeDetector
+from src.calibration.calibration import Calibration
+from src.visualization.heatmap import HeatmapGenerator
 
 def main():
-    capture = cv2.VideoCapture(0)  # Ouvrir la caméra
+    screen_size = (640, 480)
+    calibration = Calibration(screen_size)
     eye_detector = EyeDetector()
+    heatmap_generator = HeatmapGenerator(screen_size)
+
+    # Interface simple pour sélectionner l’option lunettes
+    glasses_user = input("Est-ce que vous portez des lunettes ? (oui/non) : ").strip().lower() == "oui"
+    eye_detector.set_glasses_user(glasses_user)
+
+    capture = cv2.VideoCapture(0)
 
     while True:
         ret, frame = capture.read()
@@ -33,11 +21,19 @@ def main():
             print("Erreur : Impossible de capturer le cadre.")
             break
 
-        frame_with_eyes, eyes_detected = eye_detector.detect_eyes(frame)  # Passer l'image à la détection des yeux
+        # Détection des yeux et récupération des points
+        frame_with_eyes, eyes_detected = eye_detector.detect_eyes(frame)
 
-        cv2.imshow('Eye Detection', frame_with_eyes)  # Afficher le cadre avec les yeux détectés
+        # Ajouter des points de fixation pour générer la carte de chaleur
+        for _, filtered_center in eyes_detected:
+            heatmap_generator.add_fixation_point(filtered_center)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):  # Quitter avec 'q'
+        # Générer et afficher la carte de chaleur
+        heatmap = heatmap_generator.generate_heatmap()
+        overlay = cv2.addWeighted(frame_with_eyes, 0.6, heatmap, 0.4, 0)
+        cv2.imshow('Eye Detection with Heatmap', overlay)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     capture.release()
