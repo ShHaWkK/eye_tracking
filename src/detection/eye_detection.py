@@ -19,6 +19,7 @@ class AdvancedEyeDetector:
         eyes_detected = []
         avg_ear = 0
         eyes_hidden = False  # Indicateur pour les yeux cachés
+        nose_point = None  # Point pour la position du nez
 
         if results.multi_face_landmarks:
             for face_landmarks in results.multi_face_landmarks:
@@ -49,16 +50,20 @@ class AdvancedEyeDetector:
                         eyes_hidden = True
                         avg_ear = 0  # Remettre l'EAR à 0 si les yeux sont cachés
 
-        return frame, eyes_detected, avg_ear, eyes_hidden
+                # Obtenir la position du nez en utilisant un landmark spécifique
+                nose_index = 1  # En général, le landmark 1 représente le nez dans Mediapipe
+                nose_landmark = face_landmarks.landmark[nose_index]
+                nose_point = (int(nose_landmark.x * frame.shape[1]), int(nose_landmark.y * frame.shape[0]))
 
-    # Les autres méthodes restent inchangées
-    def get_eye_landmarks(self, landmarks, frame_shape):
+        return frame, eyes_detected, avg_ear, eyes_hidden, nose_point
+
+    def get_eye_landmarks(self, face_landmarks, frame_shape):
         """Récupère les points de repère pour les yeux gauche et droit dans le cadre principal."""
         left_eye_indices = [362, 385, 387, 263, 373, 380]
         right_eye_indices = [33, 160, 158, 133, 153, 144]
         
-        left_eye_points = [(int(landmarks.landmark[i].x * frame_shape[1]), int(landmarks.landmark[i].y * frame_shape[0])) for i in left_eye_indices]
-        right_eye_points = [(int(landmarks.landmark[i].x * frame_shape[1]), int(landmarks.landmark[i].y * frame_shape[0])) for i in right_eye_indices]
+        left_eye_points = [(int(face_landmarks.landmark[i].x * frame_shape[1]), int(face_landmarks.landmark[i].y * frame_shape[0])) for i in left_eye_indices]
+        right_eye_points = [(int(face_landmarks.landmark[i].x * frame_shape[1]), int(face_landmarks.landmark[i].y * frame_shape[0])) for i in right_eye_indices]
         return left_eye_points, right_eye_points
 
     def calculate_eye_aspect_ratio(self, eye_points):

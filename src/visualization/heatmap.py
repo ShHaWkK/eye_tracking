@@ -15,7 +15,9 @@ class HeatmapGenerator:
         
         # Ajouter de la densité autour de chaque point de fixation
         for point in self.fixation_points:
-            cv2.circle(heatmap, point, radius=30, color=1, thickness=-1)
+            # Convertir les coordonnées du point en entiers pour éviter les erreurs
+            int_point = (int(point[0]), int(point[1]))
+            cv2.circle(heatmap, int_point, radius=30, color=1, thickness=-1)
 
         heatmap = cv2.GaussianBlur(heatmap, (101, 101), 0)
         heatmap = cv2.normalize(heatmap, None, 0, 255, cv2.NORM_MINMAX)
@@ -23,3 +25,8 @@ class HeatmapGenerator:
         
         heatmap_color = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
         return heatmap_color
+
+    def display_visual_field(self, frame):
+        heatmap = self.generate_heatmap()
+        overlay = cv2.addWeighted(frame, 0.6, heatmap, 0.4, 0)
+        return overlay

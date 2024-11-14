@@ -12,9 +12,10 @@ class KalmanFilter:
 
     def update(self, measurement):
         measurement = np.array(measurement, dtype=np.float32).reshape(2, 1)
+        # Ajout de vérification pour éviter la division par zéro
+        noise_sum = self.error_covariance + self.measurement_noise
+        kalman_gain = self.error_covariance @ np.linalg.inv(noise_sum) if np.linalg.det(noise_sum) != 0 else np.zeros_like(self.error_covariance)
         
-        kalman_gain = self.error_covariance @ np.linalg.inv(self.error_covariance + self.measurement_noise)
         self.state += kalman_gain @ (measurement - self.state)
         self.error_covariance = (np.eye(2) - kalman_gain) @ self.error_covariance
-
         return self.state.flatten()
