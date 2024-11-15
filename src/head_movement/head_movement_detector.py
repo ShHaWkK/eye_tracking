@@ -11,15 +11,15 @@ class HeadMovementDetector:
         if nose_point is None or left_eye is None or right_eye is None:
             return "Indéterminé"
 
-        # Calculer le vecteur entre les yeux (base horizontale)
-        eye_vector = np.array(right_eye) - np.array(left_eye)
-        nose_vector = np.array(nose_point) - (np.array(left_eye) + np.array(right_eye)) / 2
+        # Calculate the vector between the eyes (horizontal baseline)
+        eye_vector = np.array(right_eye, dtype=np.float64) - np.array(left_eye, dtype=np.float64)
+        nose_vector = np.array(nose_point, dtype=np.float64) - (np.array(left_eye) + np.array(right_eye)) / 2
 
-        # Normalisation pour éviter les variations dues à la taille du cadre
+        # Normalize the vectors to avoid frame size variations
         eye_vector /= np.linalg.norm(eye_vector) if np.linalg.norm(eye_vector) != 0 else 1
         nose_vector /= np.linalg.norm(nose_vector) if np.linalg.norm(nose_vector) != 0 else 1
 
-        # Lissage des mouvements
+        # Smooth the head movement direction to reduce abrupt changes
         if self.prev_direction_vector is None:
             self.prev_direction_vector = nose_vector
 
@@ -29,7 +29,7 @@ class HeadMovementDetector:
         )
         self.prev_direction_vector = smooth_nose_vector
 
-        # Détection basée sur des seuils
+        # Detect direction based on thresholds
         threshold_x, threshold_y = 0.4, 0.4
         if smooth_nose_vector[1] > threshold_y:
             return "Bas"

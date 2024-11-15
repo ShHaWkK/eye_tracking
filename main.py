@@ -10,10 +10,11 @@ from src.tracking.kalman_filter import KalmanFilter
 from src.head_movement.head_movement_detector import HeadMovementDetector
 
 def main():
+    # Initialize modules and variables
     screen_size = (640, 480)
     eye_detector = AdvancedEyeDetector()
     attention_calculator = AttentionCalculator(screen_size)
-    fatigue_detector = FatigueDetector()
+    fatigue_detector = FatigueDetector(blink_threshold=0.25)  # Adjust threshold if necessary
     heatmap_generator = HeatmapGenerator(screen_size)
     calibration = AutoCalibration(screen_size)
     kalman_filter = KalmanFilter(initial_state=[0, 0])
@@ -24,19 +25,20 @@ def main():
     blink_count = 0
     display_points_animation = False
     animation_start_time = 0
+    previous_eye_center_y = None  # Track previous eye center y-coordinate
 
     while True:
-        # Capture the frame
+        # Capture frame
         frame = camera.get_frame()
         frame_with_eyes, eyes_detected, avg_ear, eyes_hidden, nose_point = eye_detector.detect_eyes(frame)
 
-        # Process eye detection results
+        # If eyes are visible, continue processing
         if not eyes_hidden and avg_ear:
             for eye_data in eyes_detected:
                 left_center = eye_data['left_eye']
                 right_center = eye_data['right_eye']
 
-                # Stabilize coordinates with Kalman filter
+                # Stabilize coordinates with KalmanFilter
                 stabilized_left = kalman_filter.update(left_center)
                 stabilized_right = kalman_filter.update(right_center)
 
@@ -44,7 +46,7 @@ def main():
                 if not calibration.is_calibrated:
                     calibration.collect_calibration_data(stabilized_left, stabilized_right)
 
-                # Add fixation points to heatmap
+                # Add fixation points for heatmap
                 attention_calculator.calculate_attention(stabilized_left)
                 heatmap_generator.add_fixation_point(stabilized_left)
 
@@ -62,8 +64,16 @@ def main():
                     2,
                 )
 
+                # Calculate eye vertical movement
+                current_eye_center_y = (left_center[1] + right_center[1]) / 2
+                if previous_eye_center_y is not None:
+                    eye_vertical_movement = abs(current_eye_center_y - previous_eye_center_y)
+                else:
+                    eye_vertical_movement = 0  # Initialize movement for the first frame
+                previous_eye_center_y = current_eye_center_y  # Update for next frame
+
                 # Blink detection and engagement score management
-                blink_detected = fatigue_detector.detect_blink(avg_ear)
+                blink_detected = fatigue_detector.detect_blink(avg_ear, eye_vertical_movement)
                 if blink_detected:
                     blink_count += 1
                     print(f"Clignements détectés : {blink_count}")  # Debug
@@ -87,7 +97,7 @@ def main():
         else:
             display_points_animation = False
 
-        # Display engagement score, fatigue status, and head orientation
+        # Display scores, fatigue status, and other information
         cv2.putText(
             frame_with_eyes,
             f'Engagement Score: {engagement_score}',
@@ -107,13 +117,12 @@ def main():
             2,
         )
 
-        # Overlay heatmap on the frame
-        frame_with_heatmap = heatmap_generator.overlay_heatmap(frame_with_eyes)
+        # Display visual field (heatmap)
+        frame_with_eyes = heatmap_generator.overlay_heatmap(frame_with_eyes)
+        # Show video with data
+        cv2.imshow('Eye Tracking with Engagement and Fatigue Monitoring', frame_with_eyes)
 
-        # Display the video with heatmap
-        cv2.imshow('Eye Tracking with Engagement and Fatigue Monitoring', frame_with_heatmap)
-
-        # Exit loop on 'q' key press
+        # Exit on 'q' key
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
