@@ -26,46 +26,98 @@ def main():
     animation_start_time = 0
 
     while True:
+        # Capture the frame
         frame = camera.get_frame()
         frame_with_eyes, eyes_detected, avg_ear, eyes_hidden, nose_point = eye_detector.detect_eyes(frame)
 
+        # Process eye detection results
         if not eyes_hidden and avg_ear:
-            for (left_center, right_center) in eyes_detected:
+            for eye_data in eyes_detected:
+                left_center = eye_data['left_eye']
+                right_center = eye_data['right_eye']
+
+                # Stabilize coordinates with Kalman filter
                 stabilized_left = kalman_filter.update(left_center)
                 stabilized_right = kalman_filter.update(right_center)
 
+                # Automatic calibration
                 if not calibration.is_calibrated:
                     calibration.collect_calibration_data(stabilized_left, stabilized_right)
 
+                # Add fixation points to heatmap
                 attention_calculator.calculate_attention(stabilized_left)
                 heatmap_generator.add_fixation_point(stabilized_left)
-                
-                # Détection avancée du mouvement de tête
-                head_direction = head_movement_detector.detect_head_movement(stabilized_left, stabilized_right, nose_point)
-                cv2.putText(frame_with_eyes, f'Tête orientée : {head_direction}', (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
-                heatmap_generator.display_visual_field(frame_with_eyes)
+                # Advanced head movement detection
+                head_direction = head_movement_detector.detect_head_movement(
+                    nose_point, stabilized_left, stabilized_right
+                )
+                cv2.putText(
+                    frame_with_eyes,
+                    f'Tête orientée : {head_direction}',
+                    (10, 120),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 255, 0),
+                    2,
+                )
 
-            if fatigue_detector.detect_blink(avg_ear):
-                blink_count += 1
-                if blink_count >= 10:
-                    engagement_score += 50
-                    blink_count = 0
-                    display_points_animation = True
-                    animation_start_time = time.time()
+                # Blink detection and engagement score management
+                blink_detected = fatigue_detector.detect_blink(avg_ear)
+                if blink_detected:
+                    blink_count += 1
+                    print(f"Clignements détectés : {blink_count}")  # Debug
+                    if blink_count >= 10:
+                        engagement_score += 50
+                        blink_count = 0
+                        display_points_animation = True
+                        animation_start_time = time.time()
 
+        # Display "+50pts" animation
         if display_points_animation and time.time() - animation_start_time < 1:
-            cv2.putText(frame_with_eyes, "+50pts", (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3)
+            cv2.putText(
+                frame_with_eyes,
+                "+50pts",
+                (50, 150),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.2,
+                (0, 255, 255),
+                3,
+            )
         else:
             display_points_animation = False
 
-        cv2.putText(frame_with_eyes, f'Engagement Score: {engagement_score}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        cv2.putText(frame_with_eyes, f'Fatigue Status: {"Fatigué" if fatigue_detector.is_fatigued() else "Non fatigué"}', (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        # Display engagement score, fatigue status, and head orientation
+        cv2.putText(
+            frame_with_eyes,
+            f'Engagement Score: {engagement_score}',
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 0),
+            2,
+        )
+        cv2.putText(
+            frame_with_eyes,
+            f'Fatigue Status: {"Fatigué" if fatigue_detector.is_fatigued() else "Non fatigué"}',
+            (10, 60),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 0, 255),
+            2,
+        )
 
-        cv2.imshow('Eye Tracking with Engagement and Fatigue Monitoring', frame_with_eyes)
+        # Overlay heatmap on the frame
+        frame_with_heatmap = heatmap_generator.overlay_heatmap(frame_with_eyes)
+
+        # Display the video with heatmap
+        cv2.imshow('Eye Tracking with Engagement and Fatigue Monitoring', frame_with_heatmap)
+
+        # Exit loop on 'q' key press
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
+    # Release resources
     camera.release()
     cv2.destroyAllWindows()
 
